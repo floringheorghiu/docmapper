@@ -1,4 +1,4 @@
-import type { PluginAPI } from '@figma/plugin-typings';
+/// <reference types="@figma/plugin-typings" />
 
 export {};
 
@@ -34,6 +34,6 @@ const mockFigma = {
   ui: {
     postMessage: () => {}
   }
-} as unknown as PluginAPI;
+};
 
 (globalThis as any).figma = mockFigma;
