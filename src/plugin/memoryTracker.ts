@@ -1,4 +1,4 @@
-import { debug } from '../utils/debug';
+import { debug } from './utils/debug';
 
 interface MemorySnapshot {
   timestamp: number;

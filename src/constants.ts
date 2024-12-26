@@ -1,5 +1,7 @@
-export const VERSION = '0.2.5';
-export const LAST_STABLE = '0.2.5';
+import { version } from '../package.json';
+
+export const VERSION = version;
+export const LAST_STABLE = '0.2.6';
 
 export const CONFIG = {
   FRAME_WIDTH: 600,

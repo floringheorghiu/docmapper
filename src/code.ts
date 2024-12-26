@@ -4,7 +4,7 @@ type PluginMessage = {
   // Add other message types as needed
 };
 
-import { debug } from './utils/debug';
+import { debug } from './plugin/utils/debug';
 import { eventTracker } from './plugin/eventTracker';
 import { performance } from './plugin/performance';
 import { memoryTracker } from './plugin/memoryTracker';
