@@ -2,7 +2,7 @@
 
 A Figma plugin for automatically generating documentation from your design files.
 
-## Current Version: 0.2.5 (Stable)
+## Current Version: 0.2.6 (Stable)
 
 ## Features
 
@@ -13,45 +13,10 @@ A Figma plugin for automatically generating documentation from your design files
 - 🎨 Clean, organized documentation layout
 - ⚡ Efficient memory management and performance
 
-## Setup
-
-1. Clone the repository:
-```bash
-git clone https://github.com/floringheorghiu/figma-friday.git
-cd figma-friday
-```
-
-2. Install dependencies:
-```bash
-npm install
-```
-
-3. Build the plugin:
-```bash
-npm run build
-```
-
-4. Import into Figma:
+##Import into Figma:
 - Open Figma
 - Go to Plugins > Development > Import plugin from manifest
 - Select the `manifest.json` file from this project
-
-## Development
-
-- Run development server:
-```bash
-npm run dev
-```
-
-- Run tests:
-```bash
-npm run test
-```
-
-- Build for production:
-```bash
-npm run build
-```
 
 ## Usage
 
