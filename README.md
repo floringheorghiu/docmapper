@@ -13,7 +13,7 @@ A Figma plugin for automatically generating documentation from your design files
 - 🎨 Clean, organized documentation layout
 - ⚡ Efficient memory management and performance
 
-##Import into Figma:
+## Import into Figma:
 - Open Figma
 - Go to Plugins > Development > Import plugin from manifest
 - Select the `manifest.json` file from this project
