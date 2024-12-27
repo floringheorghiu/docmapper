@@ -9,7 +9,8 @@ export default defineConfig({
     coverage: {
       reporter: ['text', 'json', 'html'],
       exclude: ['node_modules/', 'src/tests/setup.ts']
-    }
+    },
+    include: ['src/tests/**/*.test.ts']
   },
   resolve: {
     alias: {

@@ -328,4 +328,11 @@ export class VisualizationService {
 
     return new Map([...elementMap.entries()].sort());
   }
+
+  getInteractionDescription(interaction: { trigger: { type: string }; action: { type: string; navigation: string } }): string {
+    if (interaction.trigger.type === 'ON_CLICK' && interaction.action.type === 'NAVIGATE') {
+      return `On tap → ${interaction.action.navigation}`;
+    }
+    return 'Unknown interaction';
+  }
 }
