@@ -6,7 +6,7 @@
   "scripts": {
     "prebuild": "tsc -p tsconfig.app.json",
     "build": "tsc -p tsconfig.app.json && vite build",
-    "postbuild": "mkdir dist\\output 2>nul & copy dist\\plugin.js dist\\output\\ && copy dist\\index.html dist\\output\\",
+    "postbuild": "mkdir -p dist/output && cp dist/plugin.js dist/output/ && cp dist/index.html dist/output/",
     "test": "vitest --config vitest.config.ts",
     "test:coverage": "vitest run --coverage",
     "dev": "vite",
