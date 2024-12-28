@@ -2,9 +2,9 @@ export type InteractionTrigger =
   | 'click'
   | 'hover'
   | 'timeout'
-  | 'drag'
   | 'key'
   | 'scroll'
+  | 'drag'
   | 'swipe';
 
 export type ActionType =
@@ -107,4 +107,4 @@ export interface DocumentationItem {
   screen?: ScreenContext;
 }
 
-export type Scope = 'current' | 'selection';
+export type Scope = "selection" | "current";

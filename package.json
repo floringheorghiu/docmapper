@@ -1,12 +1,12 @@
 {
   "name": "documentation-mapper",
   "private": true,
-  "version": "0.2.6",
+  "version": "0.2.7",
   "type": "module",
   "scripts": {
     "prebuild": "tsc -p tsconfig.app.json",
     "build": "tsc -p tsconfig.app.json && vite build",
-    "postbuild": "mkdir -p dist/output && cp dist/plugin.js dist/output/ && cp dist/index.html dist/output/",
+    "postbuild": "node scripts/postbuild.js",
     "dev": "vite",
     "lint": "eslint src --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
