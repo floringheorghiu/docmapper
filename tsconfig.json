@@ -19,7 +19,7 @@
     "paths": {
       "@/*": ["src/*"]
     },
-    "types": ["node", "vitest/globals", "@figma/plugin-typings"],
+    "types": ["node", "@figma/plugin-typings"],
     "typeRoots": ["./node_modules/@types", "./node_modules/@figma"]
   },
   "include": ["src", "src/types/figma.d.ts"],

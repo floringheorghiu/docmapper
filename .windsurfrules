@@ -1,0 +1,53 @@
+
+Use when: Developing Figma plugins, particularly when aiming for maximum reliability and maintainability within Figma's specific environment. Adopt a simplified development approach focused on reliability within Figma's specialized plugin environment. Key practices include:
+
+# A. Architecture & Dependencies:
+Use a single HTML file containing both inline CSS and inline JavaScript.
+Avoid external libraries or dependencies where possible to reduce points of failure.
+
+# B. DOM Interaction & Scripting:
+Prefer plain JavaScript for UI logic.
+Interact with DOM elements directly (e.g., using document.getElementById, createElement) instead of relying on UI frameworks or complex state management libraries.
+Use basic JavaScript variables, objects, and arrays for managing UI state.
+
+# C. Code Execution & Initialization:
+Run essential initialization code as soon as the script is parsed.
+Don't rely solely on window.onload. Consider using immediate execution combined with fallbacks like the DOMContentLoaded event for robustness.
+Idempotent UI Initialization: Structure UI initialization and event binding so they can be safely executed multiple times without causing errors or duplicate listeners. Always check for element existence before attaching listeners.
+
+# D. Data Handling:
+Utilize simple data structures like arrays and basic JavaScript objects. Avoid complex TypeScript interfaces/classes if simplicity is prioritized.
+Keep data structures relatively flat, minimizing deep nesting.
+For complex or binary data (e.g., images), encode as Base64 strings before passing between UI and main thread. Always include the relevant field in message objects, even if null/empty, and provide UI previews where appropriate.
+
+# E. Logic & Flow:
+Aim for clear and straightforward conditional logic (e.g., simpler decision trees with fewer branches where practical).
+Atomic Option Bundling: Consolidate all user-configurable options into a single, comprehensive object before sending to the main plugin thread. Explicitly handle mutually exclusive options within this bundling logic.
+Idempotent Feature Design: When using markers or flags to prevent general re-processing (e.g., anonymization), design specific features that need to be repeatable (like changing currency) to be idempotent. Detect and temporarily remove the marker, perform the operation, then re-apply the marker.
+
+# F. Development & Testing Strategy:
+Start with core minimal functionality and build incrementally.
+Test frequently directly within Figma, as browser behavior may differ.
+
+# G. Robustness & Defensive Programming:
+Use try/catch blocks for operations that might fail.
+Perform checks for null/undefined values, especially before accessing object properties, element properties, or adding event listeners.
+Verify DOM elements exist before attempting to manipulate them.
+Extensive Logging: Use console.log liberally to track execution flow, state changes, and variable values during development and debugging.
+Defensive Commenting: For subtle or non-obvious mechanisms (such as invisible markers), thoroughly document them directly in the code with clear, defensive comments explaining their purpose and warning against accidental modification.
+
+# H. Figma API Communication (UI <-> Main Thread):
+Keep the data structures passed between the UI (ui.html) and the main plugin code (code.ts/code.js) simple and minimal.
+Log messages sent and received on both sides to aid debugging.
+Implement checks and provide user feedback if API calls or communication fail.
+Maintain a rigid separation: UI code handles presentation and user input gathering, while main thread code handles Figma API interactions and document manipulation. All communication must occur exclusively via structured messages.
+
+# I. Documentation, Comments, and UI:
+Document any assumptions about the Figma API or environment that the plugin depends on.
+Add comments to explain the purpose of the code and any complex logic.
+Document any limitations or constraints of the plugin, such as browser compatibility or Figma version requirements.
+Provide direct access to minimal, context-relevant help within the plugin UI (e.g., a persistent “How to use” link and a visible version number). Use concise, action-oriented microcopy and progressive disclosure—reveal advanced options only when relevant.
+
+# J. User Experience:
+Use clear, concise, and action-oriented language for all UI text elements (labels, buttons, tooltips).
+Reveal advanced or less common options only when contextually relevant or explicitly requested, reducing cognitive load and user confusion.

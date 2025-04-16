@@ -3,6 +3,7 @@ import { InteractionData, ScreenInteractions } from '../../types/interaction-typ
 import { CONFIG } from '../../constants';
 
 export class VisualizationService {
+  // Async migration: Await groupInteractionsByScreen for Figma Community compatibility
   async createDocumentationNodes(chunks: DocumentationChunk[]) {
     try {
       // Create documentation page
@@ -12,8 +13,14 @@ export class VisualizationService {
       // Create main container frame
       const frame = this.createMainFrame();
       
-      // Group and sort interactions by screen
-      const screenGroups = this.groupInteractionsByScreen(chunks);
+      // Group and sort interactions by screen (now async)
+      let screenGroups: ScreenInteractions[] = [];
+      try {
+        screenGroups = await this.groupInteractionsByScreen(chunks);
+      } catch (err) {
+        console.error('[createDocumentationNodes] Error in groupInteractionsByScreen:', err);
+        screenGroups = [];
+      }
       
       // Create title and content
       await this.createTitle(frame, screenGroups);
@@ -136,8 +143,15 @@ export class VisualizationService {
 
     // Interaction list
     for (const interaction of interactions) {
+      let descText = '';
+      try {
+        descText = await this.formatInteraction(interaction);
+      } catch (err) {
+        console.error('[createElementSection] Error in formatInteraction:', interaction, err);
+        descText = '[Error formatting interaction]';
+      }
       const description = await this.createText(
-        this.formatInteraction(interaction),
+        descText,
         11,
         false
       );
@@ -148,19 +162,31 @@ export class VisualizationService {
     return section;
   }
 
-  private formatInteraction(interaction: InteractionData): string {
+  // Async migration: Now async, uses figma.getNodeByIdAsync and robust error handling
+  private async formatInteraction(interaction: InteractionData): Promise<string> {
     const trigger = this.normalizeTrigger(interaction.trigger);
-    const action = interaction.destination || 
-                  (interaction.destinationId ? 
-                    figma.getNodeById(interaction.destinationId)?.name : 
-                    this.normalizeAction(interaction.action));
+    let action: string | undefined = interaction.destination;
+    if (!action) {
+      if (interaction.destinationId) {
+        try {
+          console.log('[formatInteraction] Fetching destination node by ID async:', interaction.destinationId);
+          const destNode = await figma.getNodeByIdAsync(interaction.destinationId);
+          action = destNode?.name || this.normalizeAction(interaction.action);
+        } catch (err) {
+          console.error('[formatInteraction] Error fetching destination node:', interaction.destinationId, err);
+          action = this.normalizeAction(interaction.action);
+        }
+      } else {
+        action = this.normalizeAction(interaction.action);
+      }
+    }
 
     let description = `${trigger} → ${action}`;
-    
+
     if (interaction.metadata?.delay) {
       description += ` (after ${interaction.metadata.delay}ms)`;
     }
-    
+
     return description;
   }
 
@@ -189,12 +215,18 @@ export class VisualizationService {
     return text;
   }
 
-  private groupInteractionsByScreen(chunks: DocumentationChunk[]): ScreenInteractions[] {
+  // Async migration: propagate async/await for findParentFrame and getNodePath
+  private async groupInteractionsByScreen(chunks: DocumentationChunk[]): Promise<ScreenInteractions[]> {
     const screenMap = new Map<string, ScreenInteractions>();
 
-    chunks.forEach(chunk => {
-      const parentFrame = this.findParentFrame(chunk.nodeId);
-      if (!parentFrame) return;
+    for (const chunk of chunks) {
+      let parentFrame = null;
+      try {
+        parentFrame = await this.findParentFrame(chunk.nodeId);
+      } catch (err) {
+        console.error('[groupInteractionsByScreen] Error in findParentFrame:', chunk.nodeId, err);
+      }
+      if (!parentFrame) continue;
 
       const screenId = parentFrame.id;
       if (!screenMap.has(screenId)) {
@@ -207,7 +239,13 @@ export class VisualizationService {
       }
 
       const screenGroup = screenMap.get(screenId)!;
-      chunk.interactions.forEach(interaction => {
+      for (const interaction of chunk.interactions) {
+        let parentPath: string[] = [];
+        try {
+          parentPath = await this.getNodePath(chunk.nodeId);
+        } catch (err) {
+          console.error('[groupInteractionsByScreen] Error in getNodePath:', chunk.nodeId, err);
+        }
         screenGroup.interactions.push({
           elementName: chunk.name,
           nodeName: chunk.name,
@@ -222,12 +260,12 @@ export class VisualizationService {
             screenName: parentFrame.name,
             elementId: chunk.nodeId,
             elementName: chunk.name,
-            parentPath: this.getNodePath(chunk.nodeId)
+            parentPath
           }
         });
-      });
+      }
       screenGroup.totalInteractions = screenGroup.interactions.length;
-    });
+    }
 
     return Array.from(screenMap.values())
       .sort((a, b) => a.screenName.localeCompare(b.screenName));
@@ -247,18 +285,27 @@ export class VisualizationService {
     return new Map([...elementMap.entries()].sort());
   }
 
-  private findParentFrame(nodeId: string): SceneNode | null {
-    const node = figma.getNodeById(nodeId);
-    if (!node) return null;
-
-    let current: BaseNode | null = node;
-    while (current && 'parent' in current) {
-      if (this.isMainFrame(current)) {
-        return current as SceneNode;
+  // Async migration: Use figma.getNodeByIdAsync for Figma Community compatibility
+  private async findParentFrame(nodeId: string): Promise<SceneNode | null> {
+    try {
+      console.log('[findParentFrame] Fetching node by ID async:', nodeId);
+      const node = await figma.getNodeByIdAsync(nodeId);
+      if (!node) {
+        console.warn('[findParentFrame] Node not found:', nodeId);
+        return null;
       }
-      current = current.parent;
+      let current: BaseNode | null = node;
+      while (current && 'parent' in current) {
+        if (this.isMainFrame(current)) {
+          return current as SceneNode;
+        }
+        current = current.parent;
+      }
+      return null;
+    } catch (err) {
+      console.error('[findParentFrame] Error fetching node:', nodeId, err);
+      return null;
     }
-    return null;
   }
 
   private isMainFrame(node: BaseNode): boolean {
@@ -276,16 +323,20 @@ export class VisualizationService {
            lowerName.includes('master');
   }
 
-  private getNodePath(nodeId: string): string[] {
+  // Async migration: Use figma.getNodeByIdAsync for Figma Community compatibility
+  private async getNodePath(nodeId: string): Promise<string[]> {
     const path: string[] = [];
-    let current = figma.getNodeById(nodeId);
-
-    while (current && 'parent' in current) {
-      if (this.isMainFrame(current)) break;
-      path.unshift(current.name);
-      current = current.parent;
+    try {
+      console.log('[getNodePath] Fetching node by ID async:', nodeId);
+      let current = await figma.getNodeByIdAsync(nodeId);
+      while (current && 'parent' in current) {
+        if (this.isMainFrame(current)) break;
+        path.unshift(current.name);
+        current = current.parent;
+      }
+    } catch (err) {
+      console.error('[getNodePath] Error fetching node:', nodeId, err);
     }
-
     return path;
   }
 

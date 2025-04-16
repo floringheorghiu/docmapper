@@ -62,7 +62,7 @@ export class PluginController {
 
   async processNode(node: SceneNode & { reactions: any[] }) {
     try {
-      const screenContext = this.interactionParser.getScreenContext(node);
+      const screenContext = await this.interactionParser.getScreenContext(node);
       const interactions = node.reactions.map((reaction: any) => ({
         trigger: this.interactionParser.parseTrigger(reaction),
         action: this.interactionParser.parseAction(reaction)

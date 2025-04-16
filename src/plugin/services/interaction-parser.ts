@@ -8,10 +8,20 @@ import {
 import type { BaseNode, SceneNode } from '../../types/figma';
 
 export class InteractionParser {
-  getScreenContext(node: BaseNode): ScreenContext {
-    const parentFrame = this.findParentFrame(node);
-    const nodePath = this.getNodePath(node);
-
+  // Async migration: Await findParentFrame and getNodePath for Figma Community compatibility
+  async getScreenContext(node: BaseNode): Promise<ScreenContext> {
+    let parentFrame = null;
+    let nodePath: string[] = [];
+    try {
+      parentFrame = await this.findParentFrame(node);
+    } catch (err) {
+      console.error('[getScreenContext] Error in findParentFrame:', node.id, err);
+    }
+    try {
+      nodePath = await this.getNodePath(node);
+    } catch (err) {
+      console.error('[getScreenContext] Error in getNodePath:', node.id, err);
+    }
     return {
       screenId: parentFrame?.id || node.id,
       screenName: parentFrame?.name || 'Unknown Screen',
@@ -86,16 +96,19 @@ export class InteractionParser {
     return { type: actionType, metadata };
   }
 
-  private findParentFrame(node: BaseNode): SceneNode | null {
+  // Async migration: Use async traversal for Figma Community compatibility
+  private async findParentFrame(node: BaseNode): Promise<SceneNode | null> {
     let current: BaseNode | null = node;
-    
-    while (current && 'parent' in current) {
-      if (this.isMainFrame(current)) {
-        return current as SceneNode;
+    try {
+      while (current && 'parent' in current) {
+        if (this.isMainFrame(current)) {
+          return current as SceneNode;
+        }
+        current = current.parent;
       }
-      current = current.parent;
+    } catch (err) {
+      console.error('[findParentFrame] Error in async traversal:', node.id, err);
     }
-    
     return null;
   }
 
@@ -115,16 +128,19 @@ export class InteractionParser {
            lowerName.includes('master');
   }
 
-  private getNodePath(node: BaseNode): string[] {
+  // Async migration: Use async traversal for Figma Community compatibility
+  private async getNodePath(node: BaseNode): Promise<string[]> {
     const path: string[] = [];
     let current: BaseNode | null = node;
-
-    while (current && 'parent' in current) {
-      if (this.isMainFrame(current)) break;
-      path.unshift(current.name);
-      current = current.parent;
+    try {
+      while (current && 'parent' in current) {
+        if (this.isMainFrame(current)) break;
+        path.unshift(current.name);
+        current = current.parent;
+      }
+    } catch (err) {
+      console.error('[getNodePath] Error in async traversal:', node.id, err);
     }
-
     return path;
   }
 
