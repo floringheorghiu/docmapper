@@ -6,7 +6,7 @@ All notable changes to this project.
 
 ### Changed
 
-- Refactored plugin code to migrate synchronous node retrieval methods to async (`figma.getNodeByIdAsync`):
+- Refactored plugin code to migrate synchronous node retrieval methods to asynchronous (`figma.getNodeByIdAsync`):
   - `VisualizationService`: `findParentFrame`, `getNodePath`, and `formatInteraction` are now async with error handling.
   - `InteractionDetector`: `parseReactions`, `getScreenContext`, and downstream calls (`getInteractions`) use `async/await`.
   - `InteractionParser`: `findParentFrame`, `getNodePath`, and `getScreenContext` are async.
