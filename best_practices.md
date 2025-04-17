@@ -10,3 +10,4 @@ Key practices include
 6. Development Strategy: Employ progressive enhancement, starting with core minimal functionality and building upon it incrementally.
 7. Robustness: Incorporate defensive programming techniques, such as using try/catch blocks for error handling and performing null/undefined checks.
 8. Debugging: Make extensive use of console.log statements for debugging purposes.
+9. Async API Compliance: Use the asynchronous variants of Figma APIs (e.g., `figma.getNodeByIdAsync`, `figma.loadFontAsync`) and propagate async/await through your call chains. Avoid synchronous API calls to ensure compatibility with Figma Community plugins and prevent blocking the plugin thread.
