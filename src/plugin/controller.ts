@@ -120,7 +120,8 @@ export class PluginController {
         totalPages,
         totalNodes,
         processedNodes: this.processedNodes
-      }
+      },
+      chunks: this.documentationChunks
     });
   }
 

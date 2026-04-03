@@ -32,3 +32,9 @@ best_practices.md
 dist/*
 !dist/plugin.js
 !dist/index.html
+
+# Claude Code settings
+.claude/
+
+# Files staged for deletion
+TO-DELETE/

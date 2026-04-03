@@ -33,7 +33,8 @@ export class InteractionParser {
 
   parseTrigger(reaction: any): { type: InteractionTrigger; metadata: InteractionMetadata } {
     if (!reaction?.trigger?.type) {
-      throw new Error('Invalid trigger format');
+      console.warn('[parseTrigger] Missing trigger type, skipping reaction');
+      return { type: 'click', metadata: {} };
     }
 
     const triggerType = this.normalizeTriggerType(reaction.trigger.type);
@@ -64,7 +65,8 @@ export class InteractionParser {
 
   parseAction(reaction: any): { type: ActionType; metadata: ActionMetadata } {
     if (!reaction?.action?.type) {
-      throw new Error('Invalid action format');
+      console.warn('[parseAction] Missing action type, skipping reaction');
+      return { type: 'navigate', metadata: {} };
     }
 
     const actionType = this.normalizeActionType(reaction.action.type);
@@ -78,8 +80,9 @@ export class InteractionParser {
       };
     }
 
-    if (reaction.action.destination) {
-      metadata.destination = reaction.action.destination.name;
+    // Figma API uses destinationId (string), not destination (object)
+    if (reaction.action.destinationId) {
+      metadata.destinationId = reaction.action.destinationId;
     }
 
     if (actionType === 'overlay' && reaction.action.overlaySettings) {
@@ -147,13 +150,17 @@ export class InteractionParser {
   private normalizeTriggerType(type: string): InteractionTrigger {
     const triggerMap: Record<string, InteractionTrigger> = {
       'ON_CLICK': 'click',
+      'ON_PRESS': 'click',
+      'TOUCH_DOWN': 'click',
       'MOUSE_ENTER': 'hover',
       'MOUSE_LEAVE': 'hover',
+      'WHILE_HOVER': 'hover',
       'AFTER_TIMEOUT': 'timeout',
       'ON_DRAG': 'drag',
       'KEY_DOWN': 'key',
+      'ON_KEY_DOWN': 'key',
       'SCROLL': 'scroll',
-      'SWIPE': 'swipe'
+      'SWIPE': 'swipe',
     };
 
     const normalizedType = triggerMap[type.toUpperCase()];

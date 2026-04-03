@@ -20,9 +20,9 @@ export interface MemoryWarning {
   level: 'warning' | 'critical';
 }
 
-export type PluginToUIMessage = 
+export type PluginToUIMessage =
   | GenerationProgress
-  | { type: 'generation-complete'; stats: GenerationStats }
+  | { type: 'generation-complete'; stats: GenerationStats; chunks: DocumentationChunk[] }
   | { type: 'generation-error'; error: string; canResume: boolean; pageId?: string }
   | { type: 'chunk-loaded'; chunk: DocumentationChunk }
   | MemoryWarning;

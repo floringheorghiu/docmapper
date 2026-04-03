@@ -4,13 +4,18 @@ import { resolve } from 'path';
 export default defineConfig({
   build: {
     outDir: 'dist',
+    emptyOutDir: false,
     lib: {
       entry: resolve(__dirname, 'src/plugin/index.ts'),
-      formats: ['es'],
-      fileName: 'plugin'
+      formats: ['iife'],
+      name: 'PluginCode',
+      fileName: () => 'plugin.js'
     },
     rollupOptions: {
-      external: ['react', 'react-dom']
+      external: [],
+      output: {
+        inlineDynamicImports: true
+      }
     },
     target: 'es2017',
     minify: false

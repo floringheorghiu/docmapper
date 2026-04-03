@@ -1,5 +1,5 @@
-export const VERSION = '0.2.6';
-export const LAST_STABLE = '0.2.6';
+export const VERSION = '0.2.7';
+export const LAST_STABLE = '0.2.7';
 
 export const CONFIG = {
   FRAME_WIDTH: 600,

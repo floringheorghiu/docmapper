@@ -4,12 +4,25 @@ import { Controls } from './components/Controls';
 import { ProgressBar } from './components/ProgressBar';
 import { DocumentationList } from './components/DocumentationList';
 import { Version } from './components/Version';
-import type { Scope } from './types/documentation';
+import type { Scope, DocumentationItem, DocumentationChunk } from './types/documentation';
+
+function chunkToItem(chunk: DocumentationChunk): DocumentationItem {
+  return {
+    id: chunk.nodeId,
+    name: chunk.name,
+    type: chunk.type,
+    interactions: chunk.interactions,
+    path: chunk.screen?.parentPath,
+    screen: chunk.screen,
+  };
+}
 
 export default function App() {
   const [scope, setScope] = useState<Scope>('current');
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [items, setItems] = useState<DocumentationItem[]>([]);
+  const [chunks, setChunks] = useState<DocumentationChunk[]>([]);
   const [memoryWarning, setMemoryWarning] = useState<{
     message: string;
     usage: number;
@@ -25,9 +38,15 @@ export default function App() {
         case 'generation-progress':
           setProgress(message.progress);
           break;
+        case 'chunk-loaded':
+          setItems(prev => [...prev, chunkToItem(message.chunk)]);
+          break;
         case 'generation-complete':
           setIsGenerating(false);
           setProgress(100);
+          if (message.chunks) {
+            setChunks(message.chunks);
+          }
           break;
         case 'generation-error':
           setIsGenerating(false);
@@ -45,58 +64,61 @@ export default function App() {
 
   const handleGenerate = () => {
     setProgress(0);
+    setItems([]);
+    setChunks([]);
     setMemoryWarning(undefined);
     setIsGenerating(true);
-    parent.postMessage({ 
-      pluginMessage: { 
+    parent.postMessage({
+      pluginMessage: {
         type: 'generate-docs',
-        options: { scope } 
+        options: { scope }
       }
     }, '*');
   };
 
   const handleWebsiteClick = () => {
-    parent.postMessage({ 
-      pluginMessage: { 
+    parent.postMessage({
+      pluginMessage: {
         type: 'open-url',
         url: 'https://www.figmafridays.com'
-      } 
+      }
     }, '*');
   };
 
   const handleGithubClick = () => {
-    parent.postMessage({ 
-      pluginMessage: { 
+    parent.postMessage({
+      pluginMessage: {
         type: 'open-url',
-        url: 'https://github.com/floringheorghiu/sb1-wrshpc'
-      } 
+        url: 'https://github.com/floringheorghiu/docmapper'
+      }
     }, '*');
   };
 
   return (
     <div className="h-screen flex flex-col">
       <div className="bg-white dark:bg-gray-900 flex flex-col h-full">
-        <Header 
+        <Header
           onWebsiteClick={handleWebsiteClick}
           onGithubClick={handleGithubClick}
         />
-        
+
         <Controls
           scope={scope}
           onScopeChange={setScope}
           onGenerate={handleGenerate}
           isGenerating={isGenerating}
+          chunks={chunks}
         />
 
         {isGenerating && (
-          <ProgressBar 
-            progress={progress} 
+          <ProgressBar
+            progress={progress}
             memoryWarning={memoryWarning}
           />
         )}
 
-        <DocumentationList items={[]} />
-        
+        <DocumentationList items={items} />
+
         <Version />
       </div>
     </div>
