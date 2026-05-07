@@ -4,13 +4,14 @@ import { Controls } from './components/Controls';
 import { ProgressBar } from './components/ProgressBar';
 import { DocumentationList } from './components/DocumentationList';
 import { Version } from './components/Version';
-import type { Scope, DocumentationItem, DocumentationChunk } from './types/documentation';
+import type { Scope, ReportPlacement, DocumentationItem, DocumentationChunk } from './types/documentation';
 
 function chunkToItem(chunk: DocumentationChunk): DocumentationItem {
   return {
     id: chunk.nodeId,
     name: chunk.name,
     type: chunk.type,
+    textContent: chunk.textContent,
     interactions: chunk.interactions,
     path: chunk.screen?.parentPath,
     screen: chunk.screen,
@@ -18,11 +19,13 @@ function chunkToItem(chunk: DocumentationChunk): DocumentationItem {
 }
 
 export default function App() {
-  const [scope, setScope] = useState<Scope>('current');
+  const [scope, setScope] = useState<Scope>('selection');
+  const [reportPlacement, setReportPlacement] = useState<ReportPlacement>('current-page');
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
   const [items, setItems] = useState<DocumentationItem[]>([]);
   const [chunks, setChunks] = useState<DocumentationChunk[]>([]);
+  const [statusMessage, setStatusMessage] = useState<string | undefined>();
   const [memoryWarning, setMemoryWarning] = useState<{
     message: string;
     usage: number;
@@ -47,9 +50,16 @@ export default function App() {
           if (message.chunks) {
             setChunks(message.chunks);
           }
+          if (message.report && !message.report.created && message.report.error) {
+            setStatusMessage(`Exports are ready, but the canvas report was not created: ${message.report.error}`);
+          }
           break;
         case 'generation-error':
           setIsGenerating(false);
+          setStatusMessage(message.error);
+          break;
+        case 'generation-warning':
+          setStatusMessage(message.message);
           break;
         case 'memory-warning':
           setMemoryWarning({
@@ -67,11 +77,12 @@ export default function App() {
     setItems([]);
     setChunks([]);
     setMemoryWarning(undefined);
+    setStatusMessage(undefined);
     setIsGenerating(true);
     parent.postMessage({
       pluginMessage: {
         type: 'generate-docs',
-        options: { scope }
+        options: { scope, reportPlacement }
       }
     }, '*');
   };
@@ -104,11 +115,19 @@ export default function App() {
 
         <Controls
           scope={scope}
+          reportPlacement={reportPlacement}
           onScopeChange={setScope}
+          onReportPlacementChange={setReportPlacement}
           onGenerate={handleGenerate}
           isGenerating={isGenerating}
           chunks={chunks}
         />
+
+        {statusMessage && (
+          <div className="mx-4 mt-3 rounded-md bg-yellow-50 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-100 text-sm p-3">
+            {statusMessage}
+          </div>
+        )}
 
         {isGenerating && (
           <ProgressBar

@@ -14,7 +14,11 @@ import {
   Play,
   ToggleLeft,
   Replace,
-  Wand2
+  Wand2,
+  Link,
+  CornerUpLeft,
+  X,
+  GitBranch
 } from 'lucide-react';
 import type { DocumentationItem, Interaction, ActionType, InteractionTrigger } from '../types/documentation';
 
@@ -41,20 +45,69 @@ const getTriggerIcon = (trigger: InteractionTrigger) => {
 const getActionIcon = (action: ActionType) => {
   switch (action) {
     case 'navigate':
+    case 'scroll-to':
       return <Navigation className="w-4 h-4 text-blue-500" />;
+    case 'open-overlay':
+    case 'swap-overlay':
     case 'overlay':
       return <Layers className="w-4 h-4 text-purple-500" />;
     case 'animation':
       return <Play className="w-4 h-4 text-green-500" />;
     case 'state-change':
+    case 'change-to':
+    case 'set-variable':
+    case 'set-variable-mode':
       return <ToggleLeft className="w-4 h-4 text-orange-500" />;
     case 'component-swap':
       return <Replace className="w-4 h-4 text-pink-500" />;
     case 'smart-animate':
       return <Wand2 className="w-4 h-4 text-indigo-500" />;
+    case 'open-link':
+      return <Link className="w-4 h-4 text-blue-500" />;
+    case 'back':
+      return <CornerUpLeft className="w-4 h-4 text-gray-500" />;
+    case 'close-overlay':
+      return <X className="w-4 h-4 text-red-500" />;
+    case 'conditional':
+      return <GitBranch className="w-4 h-4 text-amber-500" />;
     default:
       return null;
   }
+};
+
+const triggerLabel = (trigger: string) => ({
+  click: 'On tap',
+  hover: 'On hover',
+  timeout: 'After delay',
+  drag: 'On drag',
+  key: 'On key press',
+  scroll: 'On scroll',
+  swipe: 'On swipe'
+}[trigger] ?? trigger);
+
+const actionLabel = (action: string) => ({
+  none: 'None',
+  navigate: 'Navigate to',
+  'change-to': 'Change to',
+  back: 'Back',
+  'scroll-to': 'Scroll to',
+  'open-link': 'Open link',
+  'set-variable': 'Set variable',
+  'set-variable-mode': 'Set variable mode',
+  conditional: 'Conditional',
+  'open-overlay': 'Open overlay',
+  'swap-overlay': 'Swap overlay',
+  'close-overlay': 'Close overlay',
+  overlay: 'Show overlay',
+  animation: 'Animate',
+  'state-change': 'Change state',
+  'component-swap': 'Swap component',
+  'smart-animate': 'Animate to'
+}[action] ?? action);
+
+const interactionSummary = (interaction: Interaction) => {
+  const target = interaction.actionMetadata?.destination || interaction.actionMetadata?.url;
+  return `${triggerLabel(interaction.trigger)} → ${actionLabel(interaction.action)}${target ? ` → ${target}` : ''}`;
 };
 
 const InteractionDetail = ({ interaction }: { interaction: Interaction }) => {
@@ -67,7 +120,7 @@ const InteractionDetail = ({ interaction }: { interaction: Interaction }) => {
         <ArrowRight className="w-3 h-3 text-gray-400" />
         {getActionIcon(interaction.action)}
         <code className="text-xs font-mono bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
-          {interaction.description || `${interaction.trigger} → ${interaction.action}`}
+          {interaction.description || interactionSummary(interaction)}
         </code>
         {(interaction.metadata || interaction.actionMetadata) && (
           <button
@@ -110,6 +163,7 @@ const InteractionDetail = ({ interaction }: { interaction: Interaction }) => {
 export function DocumentationItem({ 
   name, 
   type, 
+  textContent,
   interactions,
   path,
   constraints,
@@ -131,6 +185,11 @@ export function DocumentationItem({
             <ChevronRight className="w-4 h-4 text-gray-500" />
           }
           <span className="font-medium text-gray-900 dark:text-white">{name}</span>
+          {textContent && (
+            <span className="text-xs text-gray-600 dark:text-gray-300 truncate max-w-32">
+              “{textContent}”
+            </span>
+          )}
           <span className="text-xs text-gray-500 dark:text-gray-400">({type})</span>
           {isComponent && (
             <span className="text-xs bg-purple-100 dark:bg-purple-900 text-purple-800 

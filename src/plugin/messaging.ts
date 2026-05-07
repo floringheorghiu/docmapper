@@ -10,7 +10,7 @@ export function setupMessageHandlers(controller: PluginController) {
     try {
       switch (message.type) {
         case 'generate-docs':
-          await controller.generateDocumentation(message.options.scope);
+          await controller.generateDocumentation(message.options.scope, message.options.reportPlacement);
           break;
 
         case 'cancel-generation':

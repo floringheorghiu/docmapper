@@ -1,28 +1,33 @@
-import { DocumentationChunk } from '../../types/documentation';
+import { DocumentationChunk, ReportPlacement } from '../../types/documentation';
 import { InteractionData, ScreenInteractions } from '../../types/interaction-types';
 import { CONFIG } from '../../constants';
 import { normalizeTriggerFromInternal, normalizeActionFromInternal } from './normalization';
 
 export class VisualizationService {
-  async createDocumentationNodes(chunks: DocumentationChunk[]) {
+  private static readonly REPORT_PLUGIN_DATA_KEY = 'docmapper-report';
+
+  async createDocumentationNodes(chunks: DocumentationChunk[], placement: ReportPlacement = 'new-page') {
     try {
       // Pre-load both fonts once — no per-call loadFontAsync needed after this
       await figma.loadFontAsync({ family: 'Inter', style: 'Regular' });
       await figma.loadFontAsync({ family: 'Inter', style: 'Bold' });
 
-      // Reuse existing Documentation page if present, otherwise create one
-      let docPage = figma.root.children.find(p => p.name === 'Documentation') as PageNode | undefined;
-      if (docPage) {
-        for (const child of [...docPage.children]) {
-          child.remove();
-        }
-      } else {
-        docPage = figma.createPage();
-        docPage.name = 'Documentation';
-      }
+      const targetPage = placement === 'current-page'
+        ? figma.currentPage
+        : this.getOrCreateDocumentationPage();
+      const inSituPosition = placement === 'current-page'
+        ? this.getInSituPosition(targetPage)
+        : undefined;
+
+      this.clearPreviousReport(targetPage, placement);
 
       // Create main container frame
       const frame = this.createMainFrame();
+      frame.setPluginData(VisualizationService.REPORT_PLUGIN_DATA_KEY, 'true');
+      if (inSituPosition) {
+        frame.x = inSituPosition.x;
+        frame.y = inSituPosition.y;
+      }
 
       // Group and sort interactions by screen
       let screenGroups: ScreenInteractions[] = [];
@@ -33,11 +38,10 @@ export class VisualizationService {
         screenGroups = [];
       }
 
-      await this.createTitle(frame, screenGroups);
       await this.createScreenSections(frame, screenGroups);
 
-      docPage.appendChild(frame);
-      await figma.setCurrentPageAsync(docPage);
+      targetPage.appendChild(frame);
+      await figma.setCurrentPageAsync(targetPage);
       figma.viewport.scrollAndZoomIntoView([frame]);
 
     } catch (error) {
@@ -46,34 +50,52 @@ export class VisualizationService {
     }
   }
 
+  private getOrCreateDocumentationPage(): PageNode {
+    const docPage = figma.root.children.find(p => p.name === CONFIG.FRAME_NAME) as PageNode | undefined;
+    if (docPage) return docPage;
+
+    const page = figma.createPage();
+    page.name = CONFIG.FRAME_NAME;
+    return page;
+  }
+
+  private clearPreviousReport(page: PageNode, placement: ReportPlacement): void {
+    if (placement !== 'new-page') return;
+
+    for (const child of [...page.children]) {
+      child.remove();
+    }
+  }
+
+  private getInSituPosition(page: PageNode): { x: number; y: number } {
+    const children = page.children.filter(child =>
+      child.getPluginData(VisualizationService.REPORT_PLUGIN_DATA_KEY) !== 'true'
+    );
+
+    if (children.length === 0) {
+      return { x: 0, y: 0 };
+    }
+
+    const maxX = Math.max(...children.map(child => child.x + child.width));
+    const minY = Math.min(...children.map(child => child.y));
+    return { x: maxX + 200, y: minY };
+  }
+
   private createMainFrame(): FrameNode {
     const frame = figma.createFrame();
     frame.name = 'Documentation';
     frame.resize(CONFIG.FRAME_WIDTH, CONFIG.FRAME_HEIGHT);
     frame.fills = [{ type: 'SOLID', color: { r: 1, g: 1, b: 1 } }];
     frame.cornerRadius = 8;
-    frame.layoutMode = 'VERTICAL';
+    frame.layoutMode = 'HORIZONTAL';
     frame.paddingLeft = CONFIG.PADDING;
     frame.paddingRight = CONFIG.PADDING;
     frame.paddingTop = CONFIG.PADDING;
     frame.paddingBottom = CONFIG.PADDING;
     frame.itemSpacing = CONFIG.SPACING;
     frame.primaryAxisSizingMode = 'AUTO';
-    frame.counterAxisSizingMode = 'FIXED';
+    frame.counterAxisSizingMode = 'AUTO';
     return frame;
-  }
-
-  private createTitle(frame: FrameNode, screenGroups: ScreenInteractions[]): void {
-    const totalInteractions = screenGroups.reduce((sum, group) => sum + group.totalInteractions, 0);
-    const titleText = this.createText(
-      `Screen Interactions (${totalInteractions} total)`,
-      16,
-      true
-    );
-    frame.appendChild(titleText);
-
-    const divider = this.createDivider(frame.width - 2 * CONFIG.PADDING);
-    frame.appendChild(divider);
   }
 
   private async createScreenSections(frame: FrameNode, screenGroups: ScreenInteractions[]): Promise<void> {
@@ -124,14 +146,6 @@ export class VisualizationService {
       }
 
       frame.appendChild(screenSection);
-      // FILL must be set AFTER appendChild
-      screenSection.layoutSizingHorizontal = 'FILL';
-
-      // Divider between screens
-      if (i < screenGroups.length - 1) {
-        const divider = this.createDivider(frame.width - 2 * CONFIG.PADDING);
-        frame.appendChild(divider);
-      }
     }
   }
 
@@ -147,10 +161,10 @@ export class VisualizationService {
     const elementHeader = this.createText(
       `${elementName} (${interactions.length} interaction${interactions.length === 1 ? '' : 's'})`,
       12,
-      true,
       true
     );
-    elementHeader.fills = [{ type: 'SOLID', color: { r: 0, g: 0.4, b: 1 } }];
+    const isLinked = await this.tryLinkTextToNode(elementHeader, interactions[0]?.nodeId);
+    this.applyLinkStyle(elementHeader, isLinked);
     section.appendChild(elementHeader);
 
     for (const interaction of interactions) {
@@ -178,7 +192,7 @@ export class VisualizationService {
       row.appendChild(dot);
 
       const description = this.createText(descText, 11, false);
-      description.fills = [{ type: 'SOLID', color: { r: 0.35, g: 0.35, b: 0.35 } }];
+      this.applyLinkStyle(description, false);
       row.appendChild(description);
 
       section.appendChild(row);
@@ -205,6 +219,10 @@ export class VisualizationService {
       }
     }
 
+    if (interaction.action === 'open-link' && interaction.url) {
+      action = interaction.url;
+    }
+
     let description = `${trigger} → ${action}`;
 
     if (interaction.metadata?.delay && interaction.metadata.delay > 0) {
@@ -224,9 +242,7 @@ export class VisualizationService {
     text.fontName = { family: 'Inter', style: isBold ? 'Bold' : 'Regular' };
     text.fontSize = size;
     text.characters = content;
-    if (isLink) {
-      text.textDecoration = 'UNDERLINE';
-    }
+    text.textDecoration = isLink ? 'UNDERLINE' : 'NONE';
     return text;
   }
 
@@ -283,11 +299,13 @@ export class VisualizationService {
         screenGroup.interactions.push({
           elementName: chunk.name,
           nodeName: chunk.name,
+          textContent: chunk.textContent,
           nodeId: chunk.nodeId,
           trigger: interaction.trigger,
           action: interaction.action,
           destination: interaction.actionMetadata?.destination,
           destinationId: interaction.actionMetadata?.destinationId,
+          url: interaction.actionMetadata?.url,
           metadata: interaction.metadata,
           screen: {
             screenId: parentFrame.id,
@@ -308,13 +326,53 @@ export class VisualizationService {
   private groupInteractionsByElement(interactions: InteractionData[]): Map<string, InteractionData[]> {
     const elementMap = new Map<string, InteractionData[]>();
     interactions.forEach(interaction => {
-      const key = interaction.elementName;
+      const key = this.formatElementName(interaction);
       if (!elementMap.has(key)) {
         elementMap.set(key, []);
       }
       elementMap.get(key)!.push(interaction);
     });
     return new Map([...elementMap.entries()].sort());
+  }
+
+  private formatElementName(interaction: InteractionData): string {
+    return interaction.textContent
+      ? `${interaction.elementName} — “${interaction.textContent}”`
+      : interaction.elementName;
+  }
+
+  private applyLinkStyle(text: TextNode, isLinked: boolean): void {
+    text.fills = [{ type: 'SOLID', color: isLinked ? { r: 0, g: 0.4, b: 1 } : { r: 0, g: 0, b: 0 } }];
+    text.textDecoration = isLinked ? 'UNDERLINE' : 'NONE';
+  }
+
+  private async tryLinkTextToNode(text: TextNode, nodeId?: string): Promise<boolean> {
+    if (!nodeId) return false;
+
+    const targetIds = [nodeId];
+    const parentFrame = await this.findParentFrame(nodeId);
+    if (parentFrame?.id && parentFrame.id !== nodeId) {
+      targetIds.push(parentFrame.id);
+    }
+
+    for (const targetId of targetIds) {
+      try {
+        const target = await figma.getNodeByIdAsync(targetId);
+        if (!target || target.removed) continue;
+
+        text.setRangeHyperlink(0, text.characters.length, {
+          type: 'NODE',
+          value: targetId
+        });
+        text.textDecoration = 'UNDERLINE';
+        return true;
+      } catch (error) {
+        console.warn('[tryLinkTextToNode] Could not create node hyperlink:', targetId, error);
+      }
+    }
+
+    text.textDecoration = 'NONE';
+    return false;
   }
 
   private async findParentFrame(nodeId: string): Promise<SceneNode | null> {
