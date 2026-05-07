@@ -17,7 +17,18 @@ function triggerLabel(type: string): string {
 
 function actionLabel(type: string): string {
   const map: Record<string, string> = {
-    'navigate': 'Navigate',
+    'none': 'None',
+    'navigate': 'Navigate to',
+    'change-to': 'Change to',
+    'back': 'Back',
+    'scroll-to': 'Scroll to',
+    'open-link': 'Open link',
+    'set-variable': 'Set variable',
+    'set-variable-mode': 'Set variable mode',
+    'conditional': 'Conditional',
+    'open-overlay': 'Open overlay',
+    'swap-overlay': 'Swap overlay',
+    'close-overlay': 'Close overlay',
     'overlay': 'Show overlay',
     'animation': 'Animate',
     'state-change': 'Change state',
@@ -66,13 +77,15 @@ function groupByScreen(chunks: DocumentationChunk[]): ExportScreen[] {
 
     const screen = screenMap.get(screenId)!;
     screen.elements.push({
-      elementName: chunk.name,
+      elementName: chunk.textContent ? `${chunk.name} — “${chunk.textContent}”` : chunk.name,
       path: chunk.screen?.parentPath ?? [],
       interactions: chunk.interactions.map(i => ({
         trigger: triggerLabel(i.trigger),
         action: i.actionMetadata?.destination
           ? `${actionLabel(i.action)} → ${i.actionMetadata.destination}`
-          : actionLabel(i.action),
+          : i.actionMetadata?.url
+            ? `${actionLabel(i.action)} → ${i.actionMetadata.url}`
+            : actionLabel(i.action),
         destination: i.actionMetadata?.destination,
         delay: i.metadata?.delay && i.metadata.delay > 0 ? i.metadata.delay : undefined,
       })),
@@ -137,7 +150,7 @@ export function chunksToMarkdown(chunks: DocumentationChunk[]): string {
 
 export function downloadMarkdown(chunks: DocumentationChunk[]): void {
   const md = chunksToMarkdown(chunks);
-  triggerDownload(md, `docmapper-${Date.now()}.md`, 'text/markdown');
+  triggerDownload(md, `doc_markdown_${timestampForFilename()}.md`, 'text/markdown');
 }
 
 // ─── Mermaid export ───────────────────────────────────────────────────────────
@@ -191,10 +204,16 @@ export function chunksToMermaid(chunks: DocumentationChunk[]): string {
 
 export function downloadMermaid(chunks: DocumentationChunk[]): void {
   const md = chunksToMermaid(chunks);
-  triggerDownload(md, `docmapper-${Date.now()}.md`, 'text/markdown');
+  triggerDownload(md, `doc_mermaid_${timestampForFilename()}.txt`, 'text/plain');
 }
 
 // ─── Shared download helper ───────────────────────────────────────────────────
+
+function timestampForFilename(): string {
+  const now = new Date();
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${pad(now.getDate())}-${pad(now.getMonth() + 1)}-${now.getFullYear()}_${pad(now.getHours())}-${pad(now.getMinutes())}`;
+}
 
 function triggerDownload(content: string, filename: string, mimeType: string): void {
   const blob = new Blob([content], { type: mimeType });

@@ -1,16 +1,18 @@
 import React from 'react';
-import { Scope, DocumentationChunk } from '../types/documentation';
+import { Scope, DocumentationChunk, ReportPlacement } from '../types/documentation';
 import { downloadMermaid, downloadMarkdown } from '../utils/export';
 
 interface ControlsProps {
   scope: Scope;
+  reportPlacement: ReportPlacement;
   onScopeChange: (scope: Scope) => void;
+  onReportPlacementChange: (placement: ReportPlacement) => void;
   onGenerate: () => void;
   isGenerating: boolean;
   chunks: DocumentationChunk[];
 }
 
-export function Controls({ scope, onScopeChange, onGenerate, isGenerating, chunks }: ControlsProps) {
+export function Controls({ scope, reportPlacement, onScopeChange, onReportPlacementChange, onGenerate, isGenerating, chunks }: ControlsProps) {
   const hasResults = chunks.length > 0;
 
   return (
@@ -45,6 +47,22 @@ export function Controls({ scope, onScopeChange, onGenerate, isGenerating, chunk
             </span>
           </label>
         </div>
+      </div>
+
+      <div className="mb-4">
+        <label className="text-sm font-medium mb-2 text-gray-700 dark:text-gray-300 block">
+          Canvas report
+        </label>
+        <select
+          value={reportPlacement}
+          onChange={(event) => onReportPlacementChange(event.target.value as ReportPlacement)}
+          disabled={isGenerating}
+          className="w-full text-sm rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 px-3 py-2 disabled:opacity-50"
+        >
+          <option value="new-page">New Documentation page</option>
+          <option value="current-page">Current page / in situ</option>
+          <option value="none">Skip canvas report</option>
+        </select>
       </div>
 
       <button

@@ -11,7 +11,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       try {
         switch (message.type) {
           case "generate-docs":
-            await controller2.generateDocumentation(message.options.scope);
+            await controller2.generateDocumentation(message.options.scope, message.options.reportPlacement);
             break;
           case "cancel-generation":
             controller2.cancelGeneration();
@@ -34,6 +34,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
   const CONFIG = {
     FRAME_WIDTH: 600,
     FRAME_HEIGHT: 400,
+    FRAME_NAME: "Documentation",
     PADDING: 20,
     SPACING: 16
   };
@@ -53,7 +54,18 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
   function normalizeActionFromInternal(type) {
     var _a;
     const map = {
-      "navigate": "Navigate",
+      "none": "None",
+      "navigate": "Navigate to",
+      "change-to": "Change to",
+      "back": "Back",
+      "scroll-to": "Scroll to",
+      "open-link": "Open link",
+      "set-variable": "Set variable",
+      "set-variable-mode": "Set variable mode",
+      "conditional": "Conditional",
+      "open-overlay": "Open overlay",
+      "swap-overlay": "Swap overlay",
+      "close-overlay": "Close overlay",
       "overlay": "Show overlay",
       "animation": "Animate",
       "state-change": "Change state",
@@ -62,21 +74,20 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     };
     return (_a = map[type]) != null ? _a : type;
   }
-  class VisualizationService {
-    async createDocumentationNodes(chunks) {
+  const _VisualizationService = class _VisualizationService {
+    async createDocumentationNodes(chunks, placement = "new-page") {
       try {
         await figma.loadFontAsync({ family: "Inter", style: "Regular" });
         await figma.loadFontAsync({ family: "Inter", style: "Bold" });
-        let docPage = figma.root.children.find((p) => p.name === "Documentation");
-        if (docPage) {
-          for (const child of [...docPage.children]) {
-            child.remove();
-          }
-        } else {
-          docPage = figma.createPage();
-          docPage.name = "Documentation";
-        }
+        const targetPage = placement === "current-page" ? figma.currentPage : this.getOrCreateDocumentationPage();
+        const inSituPosition = placement === "current-page" ? this.getInSituPosition(targetPage) : void 0;
+        this.clearPreviousReport(targetPage, placement);
         const frame = this.createMainFrame();
+        frame.setPluginData(_VisualizationService.REPORT_PLUGIN_DATA_KEY, "true");
+        if (inSituPosition) {
+          frame.x = inSituPosition.x;
+          frame.y = inSituPosition.y;
+        }
         let screenGroups = [];
         try {
           screenGroups = await this.groupInteractionsByScreen(chunks);
@@ -84,15 +95,38 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
           console.error("[createDocumentationNodes] Error in groupInteractionsByScreen:", err);
           screenGroups = [];
         }
-        await this.createTitle(frame, screenGroups);
         await this.createScreenSections(frame, screenGroups);
-        docPage.appendChild(frame);
-        await figma.setCurrentPageAsync(docPage);
+        targetPage.appendChild(frame);
+        await figma.setCurrentPageAsync(targetPage);
         figma.viewport.scrollAndZoomIntoView([frame]);
       } catch (error) {
         console.error("Error creating documentation:", error);
         throw error;
       }
+    }
+    getOrCreateDocumentationPage() {
+      const docPage = figma.root.children.find((p) => p.name === CONFIG.FRAME_NAME);
+      if (docPage) return docPage;
+      const page = figma.createPage();
+      page.name = CONFIG.FRAME_NAME;
+      return page;
+    }
+    clearPreviousReport(page, placement) {
+      if (placement !== "new-page") return;
+      for (const child of [...page.children]) {
+        child.remove();
+      }
+    }
+    getInSituPosition(page) {
+      const children = page.children.filter(
+        (child) => child.getPluginData(_VisualizationService.REPORT_PLUGIN_DATA_KEY) !== "true"
+      );
+      if (children.length === 0) {
+        return { x: 0, y: 0 };
+      }
+      const maxX = Math.max(...children.map((child) => child.x + child.width));
+      const minY = Math.min(...children.map((child) => child.y));
+      return { x: maxX + 200, y: minY };
     }
     createMainFrame() {
       const frame = figma.createFrame();
@@ -100,26 +134,15 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       frame.resize(CONFIG.FRAME_WIDTH, CONFIG.FRAME_HEIGHT);
       frame.fills = [{ type: "SOLID", color: { r: 1, g: 1, b: 1 } }];
       frame.cornerRadius = 8;
-      frame.layoutMode = "VERTICAL";
+      frame.layoutMode = "HORIZONTAL";
       frame.paddingLeft = CONFIG.PADDING;
       frame.paddingRight = CONFIG.PADDING;
       frame.paddingTop = CONFIG.PADDING;
       frame.paddingBottom = CONFIG.PADDING;
       frame.itemSpacing = CONFIG.SPACING;
       frame.primaryAxisSizingMode = "AUTO";
-      frame.counterAxisSizingMode = "FIXED";
+      frame.counterAxisSizingMode = "AUTO";
       return frame;
-    }
-    createTitle(frame, screenGroups) {
-      const totalInteractions = screenGroups.reduce((sum, group) => sum + group.totalInteractions, 0);
-      const titleText = this.createText(
-        `Screen Interactions (${totalInteractions} total)`,
-        16,
-        true
-      );
-      frame.appendChild(titleText);
-      const divider = this.createDivider(frame.width - 2 * CONFIG.PADDING);
-      frame.appendChild(divider);
     }
     async createScreenSections(frame, screenGroups) {
       for (let i = 0; i < screenGroups.length; i++) {
@@ -157,14 +180,10 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
           screenSection.appendChild(elementSection);
         }
         frame.appendChild(screenSection);
-        screenSection.layoutSizingHorizontal = "FILL";
-        if (i < screenGroups.length - 1) {
-          const divider = this.createDivider(frame.width - 2 * CONFIG.PADDING);
-          frame.appendChild(divider);
-        }
       }
     }
     async createElementSection(elementName, interactions) {
+      var _a;
       const section = figma.createFrame();
       section.layoutMode = "VERTICAL";
       section.itemSpacing = 8;
@@ -175,10 +194,10 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       const elementHeader = this.createText(
         `${elementName} (${interactions.length} interaction${interactions.length === 1 ? "" : "s"})`,
         12,
-        true,
         true
       );
-      elementHeader.fills = [{ type: "SOLID", color: { r: 0, g: 0.4, b: 1 } }];
+      const isLinked = await this.tryLinkTextToNode(elementHeader, (_a = interactions[0]) == null ? void 0 : _a.nodeId);
+      this.applyLinkStyle(elementHeader, isLinked);
       section.appendChild(elementHeader);
       for (const interaction of interactions) {
         let descText = "";
@@ -201,7 +220,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
         dot.fills = [{ type: "SOLID", color: this.getTriggerColor(interaction.trigger) }];
         row.appendChild(dot);
         const description = this.createText(descText, 11, false);
-        description.fills = [{ type: "SOLID", color: { r: 0.35, g: 0.35, b: 0.35 } }];
+        this.applyLinkStyle(description, false);
         row.appendChild(description);
         section.appendChild(row);
       }
@@ -224,6 +243,9 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
           action = this.normalizeAction(interaction.action);
         }
       }
+      if (interaction.action === "open-link" && interaction.url) {
+        action = interaction.url;
+      }
       let description = `${trigger} → ${action}`;
       if (((_a = interaction.metadata) == null ? void 0 : _a.delay) && interaction.metadata.delay > 0) {
         description += ` (after ${interaction.metadata.delay}ms)`;
@@ -235,9 +257,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       text.fontName = { family: "Inter", style: isBold ? "Bold" : "Regular" };
       text.fontSize = size;
       text.characters = content;
-      if (isLink) {
-        text.textDecoration = "UNDERLINE";
-      }
+      text.textDecoration = isLink ? "UNDERLINE" : "NONE";
       return text;
     }
     createDivider(width) {
@@ -260,7 +280,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       return (_a = colorMap[trigger]) != null ? _a : { r: 0.6, g: 0.6, b: 0.6 };
     }
     async groupInteractionsByScreen(chunks) {
-      var _a, _b;
+      var _a, _b, _c;
       const screenMap = /* @__PURE__ */ new Map();
       for (const chunk of chunks) {
         let parentFrame = null;
@@ -290,11 +310,13 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
           screenGroup.interactions.push({
             elementName: chunk.name,
             nodeName: chunk.name,
+            textContent: chunk.textContent,
             nodeId: chunk.nodeId,
             trigger: interaction.trigger,
             action: interaction.action,
             destination: (_a = interaction.actionMetadata) == null ? void 0 : _a.destination,
             destinationId: (_b = interaction.actionMetadata) == null ? void 0 : _b.destinationId,
+            url: (_c = interaction.actionMetadata) == null ? void 0 : _c.url,
             metadata: interaction.metadata,
             screen: {
               screenId: parentFrame.id,
@@ -312,13 +334,44 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     groupInteractionsByElement(interactions) {
       const elementMap = /* @__PURE__ */ new Map();
       interactions.forEach((interaction) => {
-        const key = interaction.elementName;
+        const key = this.formatElementName(interaction);
         if (!elementMap.has(key)) {
           elementMap.set(key, []);
         }
         elementMap.get(key).push(interaction);
       });
       return new Map([...elementMap.entries()].sort());
+    }
+    formatElementName(interaction) {
+      return interaction.textContent ? `${interaction.elementName} — “${interaction.textContent}”` : interaction.elementName;
+    }
+    applyLinkStyle(text, isLinked) {
+      text.fills = [{ type: "SOLID", color: isLinked ? { r: 0, g: 0.4, b: 1 } : { r: 0, g: 0, b: 0 } }];
+      text.textDecoration = isLinked ? "UNDERLINE" : "NONE";
+    }
+    async tryLinkTextToNode(text, nodeId) {
+      if (!nodeId) return false;
+      const targetIds = [nodeId];
+      const parentFrame = await this.findParentFrame(nodeId);
+      if ((parentFrame == null ? void 0 : parentFrame.id) && parentFrame.id !== nodeId) {
+        targetIds.push(parentFrame.id);
+      }
+      for (const targetId of targetIds) {
+        try {
+          const target = await figma.getNodeByIdAsync(targetId);
+          if (!target || target.removed) continue;
+          text.setRangeHyperlink(0, text.characters.length, {
+            type: "NODE",
+            value: targetId
+          });
+          text.textDecoration = "UNDERLINE";
+          return true;
+        } catch (error) {
+          console.warn("[tryLinkTextToNode] Could not create node hyperlink:", targetId, error);
+        }
+      }
+      text.textDecoration = "NONE";
+      return false;
     }
     async findParentFrame(nodeId) {
       try {
@@ -365,7 +418,9 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     normalizeAction(action) {
       return normalizeActionFromInternal(action);
     }
-  }
+  };
+  __publicField(_VisualizationService, "REPORT_PLUGIN_DATA_KEY", "docmapper-report");
+  let VisualizationService = _VisualizationService;
   const _BatchProcessor = class _BatchProcessor {
     constructor(controller2) {
       this.controller = controller2;
@@ -458,6 +513,26 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     }
   }
   class InteractionParser {
+    extractTextContent(node) {
+      const textValues = [];
+      this.collectTextContent(node, textValues);
+      const textContent = textValues.map((value) => value.trim()).filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
+      return textContent ? this.truncateText(textContent, 60) : void 0;
+    }
+    truncateText(value, maxLength) {
+      return value.length > maxLength ? `${value.slice(0, maxLength)}…` : value;
+    }
+    collectTextContent(node, textValues) {
+      if ("type" in node && node.type === "TEXT" && "characters" in node) {
+        textValues.push(String(node.characters));
+        return;
+      }
+      if ("children" in node) {
+        for (const child of node.children) {
+          this.collectTextContent(child, textValues);
+        }
+      }
+    }
     // Async migration: Await findParentFrame and getNodePath for Figma Community compatibility
     async getScreenContext(node) {
       let parentFrame = null;
@@ -507,31 +582,44 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       }
       return { type: triggerType, metadata };
     }
-    parseAction(reaction) {
-      var _a, _b;
-      if (!((_a = reaction == null ? void 0 : reaction.action) == null ? void 0 : _a.type)) {
-        console.warn("[parseAction] Missing action type, skipping reaction");
-        return { type: "navigate", metadata: {} };
+    parseActions(reaction) {
+      const actions = Array.isArray(reaction == null ? void 0 : reaction.actions) ? reaction.actions : (reaction == null ? void 0 : reaction.action) ? [reaction.action] : [];
+      if (actions.length === 0) {
+        return [{ type: "none", metadata: {} }];
       }
-      const actionType = this.normalizeActionType(reaction.action.type);
+      return actions.map((action) => this.parseAction(action));
+    }
+    parseAction(action) {
+      var _a;
+      if (!(action == null ? void 0 : action.type)) {
+        console.warn("[parseAction] Missing action type, marking as none");
+        return { type: "none", metadata: {} };
+      }
+      const actionType = this.normalizeActionType(action);
       const metadata = {};
-      if (reaction.action.transition) {
+      if (action.transition) {
         metadata.animation = {
-          type: reaction.action.transition.type || "INSTANT",
-          duration: reaction.action.transition.duration || 0,
-          easing: ((_b = reaction.action.transition.easing) == null ? void 0 : _b.type) || "EASE_OUT"
+          type: action.transition.type || "INSTANT",
+          duration: action.transition.duration || 0,
+          easing: ((_a = action.transition.easing) == null ? void 0 : _a.type) || "EASE_OUT"
         };
       }
-      if (reaction.action.destinationId) {
-        metadata.destinationId = reaction.action.destinationId;
+      if (action.destinationId) metadata.destinationId = action.destinationId;
+      if (action.navigation) metadata.navigation = action.navigation;
+      if (action.url) metadata.url = action.url;
+      if (typeof action.openInNewTab === "boolean") metadata.openInNewTab = action.openInNewTab;
+      if ("variableId" in action) metadata.variableId = action.variableId;
+      if ("variableCollectionId" in action) metadata.variableCollectionId = action.variableCollectionId;
+      if ("variableModeId" in action) metadata.variableModeId = action.variableModeId;
+      if (Array.isArray(action.conditionalBlocks)) metadata.conditionalBlocks = action.conditionalBlocks.length;
+      if (action.mediaAction) metadata.mediaAction = action.mediaAction;
+      if ((actionType === "open-overlay" || actionType === "overlay") && action.overlaySettings) {
+        metadata.overlay = action.overlaySettings.name;
       }
-      if (actionType === "overlay" && reaction.action.overlaySettings) {
-        metadata.overlay = reaction.action.overlaySettings.name;
-      }
-      if (actionType === "state-change" && reaction.action.states) {
+      if ((actionType === "state-change" || actionType === "change-to") && action.states) {
         metadata.state = {
-          from: reaction.action.states.current,
-          to: reaction.action.states.target
+          from: action.states.current,
+          to: action.states.target
         };
       }
       return { type: actionType, metadata };
@@ -598,19 +686,40 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       }
       return normalizedType;
     }
-    normalizeActionType(type) {
+    normalizeActionType(action) {
+      var _a;
+      const rawType = String(action.type || "").toUpperCase();
+      if (rawType === "NODE") {
+        const navigation = String(action.navigation || "").toUpperCase();
+        const navigationMap = {
+          "NAVIGATE": "navigate",
+          "CHANGE_TO": "change-to",
+          "SCROLL_TO": "scroll-to",
+          "OVERLAY": "open-overlay",
+          "SWAP": "swap-overlay"
+        };
+        return (_a = navigationMap[navigation]) != null ? _a : "navigate";
+      }
       const actionMap = {
+        "NONE": "none",
+        "BACK": "back",
+        "CLOSE": "close-overlay",
+        "URL": "open-link",
+        "OPEN_URL": "open-link",
+        "SET_VARIABLE": "set-variable",
+        "SET_VARIABLE_MODE": "set-variable-mode",
+        "CONDITIONAL": "conditional",
+        "UPDATE_MEDIA_RUNTIME": "animation",
         "NAVIGATE": "navigate",
         "SMART_ANIMATE": "smart-animate",
-        "OVERLAY": "overlay",
-        "SWAP": "component-swap",
-        "STATE_CHANGE": "state-change",
-        "OPEN_URL": "navigate"
+        "OVERLAY": "open-overlay",
+        "SWAP": "swap-overlay",
+        "STATE_CHANGE": "change-to"
       };
-      const normalizedType = actionMap[type.toUpperCase()];
+      const normalizedType = actionMap[rawType];
       if (!normalizedType) {
-        console.warn(`Unknown action type: ${type}, defaulting to 'navigate'`);
-        return "navigate";
+        console.warn(`Unknown action type: ${action.type}, defaulting to 'none'`);
+        return "none";
       }
       return normalizedType;
     }
@@ -636,7 +745,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       this.interactionParser = new InteractionParser();
       this.documentationChunks = [];
     }
-    async generateDocumentation(scope) {
+    async generateDocumentation(scope, reportPlacement = "new-page") {
       if (this.isGenerating) {
         throw new Error("Documentation generation already in progress");
       }
@@ -648,8 +757,8 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
         }
         const nodes = await this.traversalService.findInteractiveNodes(scope);
         await this.batchProcessor.processNodesInBatches(nodes, totalNodes);
-        await this.visualizationService.createDocumentationNodes(this.documentationChunks);
-        this.sendCompletionStatus(1, totalNodes);
+        const report = await this.createCanvasReport(reportPlacement);
+        this.sendCompletionStatus(1, totalNodes, report);
       } catch (error) {
         if (error instanceof Error) {
           this.handleError(error);
@@ -663,15 +772,17 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     async processNode(node) {
       try {
         const screenContext = await this.interactionParser.getScreenContext(node);
-        const interactions = node.reactions.map((reaction) => ({
-          trigger: this.interactionParser.parseTrigger(reaction),
-          action: this.interactionParser.parseAction(reaction)
-        }));
+        const textContent = this.interactionParser.extractTextContent(node);
+        const interactions = node.reactions.flatMap((reaction) => {
+          const trigger = this.interactionParser.parseTrigger(reaction);
+          return this.interactionParser.parseActions(reaction).map((action) => ({ trigger, action }));
+        });
         const chunk = {
           pageId: figma.currentPage.id,
           nodeId: node.id,
           name: node.name,
           type: node.type,
+          textContent,
           screen: screenContext,
           interactions: interactions.map((interaction) => ({
             trigger: interaction.trigger.type,
@@ -708,7 +819,42 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
         canResume: false
       });
     }
-    sendCompletionStatus(totalPages, totalNodes) {
+    async createCanvasReport(reportPlacement) {
+      if (reportPlacement === "none") {
+        return { created: false, placement: reportPlacement };
+      }
+      try {
+        await this.visualizationService.createDocumentationNodes(this.documentationChunks, reportPlacement);
+        return { created: true, placement: reportPlacement };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unknown canvas report error";
+        if (reportPlacement === "new-page") {
+          try {
+            await this.visualizationService.createDocumentationNodes(this.documentationChunks, "current-page");
+            const fallbackMessage = `Could not create a new Documentation page, so the report was created on the current page instead. Reason: ${message}`;
+            figma.notify(fallbackMessage, { timeout: 7e3 });
+            sendToUI({
+              type: "generation-warning",
+              message: fallbackMessage
+            });
+            return { created: true, placement: "current-page", error: message };
+          } catch (fallbackError) {
+            const fallbackMessage = fallbackError instanceof Error ? fallbackError.message : "Unknown fallback report error";
+            sendToUI({
+              type: "generation-warning",
+              message: `Interactions extracted, but the canvas report could not be created: ${fallbackMessage}`
+            });
+            return { created: false, placement: reportPlacement, error: fallbackMessage };
+          }
+        }
+        sendToUI({
+          type: "generation-warning",
+          message: `Interactions extracted, but the canvas report could not be created: ${message}`
+        });
+        return { created: false, placement: reportPlacement, error: message };
+      }
+    }
+    sendCompletionStatus(totalPages, totalNodes, report) {
       sendToUI({
         type: "generation-complete",
         stats: {
@@ -716,7 +862,8 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
           totalNodes,
           processedNodes: this.processedNodes
         },
-        chunks: this.documentationChunks
+        chunks: this.documentationChunks,
+        report
       });
     }
     cleanup() {

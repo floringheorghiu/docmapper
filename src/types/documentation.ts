@@ -8,7 +8,18 @@ export type InteractionTrigger =
   | 'swipe';
 
 export type ActionType =
+  | 'none'
   | 'navigate'
+  | 'change-to'
+  | 'back'
+  | 'scroll-to'
+  | 'open-link'
+  | 'set-variable'
+  | 'set-variable-mode'
+  | 'conditional'
+  | 'open-overlay'
+  | 'swap-overlay'
+  | 'close-overlay'
   | 'overlay'
   | 'animation'
   | 'state-change'
@@ -43,6 +54,14 @@ export interface InteractionMetadata {
 export interface ActionMetadata {
   destination?: string;
   destinationId?: string;
+  url?: string;
+  openInNewTab?: boolean;
+  navigation?: string;
+  variableId?: string | null;
+  variableCollectionId?: string | null;
+  variableModeId?: string | null;
+  conditionalBlocks?: number;
+  mediaAction?: string;
   overlay?: string;
   animation?: {
     type: string;
@@ -73,6 +92,7 @@ export interface DocumentationChunk {
   nodeId: string;
   name: string;
   type: string;
+  textContent?: string;
   interactions: Interaction[];
   timestamp: number;
   version: number;
@@ -96,6 +116,7 @@ export interface DocumentationItem {
   id: string;
   name: string;
   type: string;
+  textContent?: string;
   interactions: Interaction[];
   path?: string[];
   constraints?: {
@@ -108,3 +129,4 @@ export interface DocumentationItem {
 }
 
 export type Scope = 'current' | 'selection';
+export type ReportPlacement = 'new-page' | 'current-page' | 'none';

@@ -1,4 +1,4 @@
-import { DocumentationChunk } from '../types/documentation';
+import { DocumentationChunk, ReportPlacement } from '../types/documentation';
 import { sendToUI } from './messaging';
 import { VisualizationService } from './services/visualization';
 import { BatchProcessor } from './services/batch-processor';
@@ -29,7 +29,7 @@ export class PluginController {
     this.documentationChunks = [];
   }
 
-  async generateDocumentation(scope: 'current' | 'selection') {
+  async generateDocumentation(scope: 'current' | 'selection', reportPlacement: ReportPlacement = 'new-page') {
     if (this.isGenerating) {
       throw new Error('Documentation generation already in progress');
     }
@@ -46,9 +46,9 @@ export class PluginController {
 
       const nodes = await this.traversalService.findInteractiveNodes(scope);
       await this.batchProcessor.processNodesInBatches(nodes, totalNodes);
-      await this.visualizationService.createDocumentationNodes(this.documentationChunks);
-      
-      this.sendCompletionStatus(1, totalNodes);
+
+      const report = await this.createCanvasReport(reportPlacement);
+      this.sendCompletionStatus(1, totalNodes, report);
     } catch (error) {
       if (error instanceof Error) {
         this.handleError(error);
@@ -63,16 +63,18 @@ export class PluginController {
   async processNode(node: SceneNode & { reactions: any[] }) {
     try {
       const screenContext = await this.interactionParser.getScreenContext(node);
-      const interactions = node.reactions.map((reaction: any) => ({
-        trigger: this.interactionParser.parseTrigger(reaction),
-        action: this.interactionParser.parseAction(reaction)
-      }));
+      const textContent = this.interactionParser.extractTextContent(node);
+      const interactions = node.reactions.flatMap((reaction: any) => {
+        const trigger = this.interactionParser.parseTrigger(reaction);
+        return this.interactionParser.parseActions(reaction).map(action => ({ trigger, action }));
+      });
 
       const chunk: DocumentationChunk = {
         pageId: figma.currentPage.id,
         nodeId: node.id,
         name: node.name,
         type: node.type,
+        textContent,
         screen: screenContext,
         interactions: interactions.map((interaction: any) => ({
           trigger: interaction.trigger.type,
@@ -113,7 +115,46 @@ export class PluginController {
     });
   }
 
-  private sendCompletionStatus(totalPages: number, totalNodes: number) {
+  private async createCanvasReport(reportPlacement: ReportPlacement) {
+    if (reportPlacement === 'none') {
+      return { created: false, placement: reportPlacement };
+    }
+
+    try {
+      await this.visualizationService.createDocumentationNodes(this.documentationChunks, reportPlacement);
+      return { created: true, placement: reportPlacement };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown canvas report error';
+
+      if (reportPlacement === 'new-page') {
+        try {
+          await this.visualizationService.createDocumentationNodes(this.documentationChunks, 'current-page');
+          const fallbackMessage = `Could not create a new Documentation page, so the report was created on the current page instead. Reason: ${message}`;
+          figma.notify(fallbackMessage, { timeout: 7000 });
+          sendToUI({
+            type: 'generation-warning',
+            message: fallbackMessage
+          });
+          return { created: true, placement: 'current-page' as const, error: message };
+        } catch (fallbackError) {
+          const fallbackMessage = fallbackError instanceof Error ? fallbackError.message : 'Unknown fallback report error';
+          sendToUI({
+            type: 'generation-warning',
+            message: `Interactions extracted, but the canvas report could not be created: ${fallbackMessage}`
+          });
+          return { created: false, placement: reportPlacement, error: fallbackMessage };
+        }
+      }
+
+      sendToUI({
+        type: 'generation-warning',
+        message: `Interactions extracted, but the canvas report could not be created: ${message}`
+      });
+      return { created: false, placement: reportPlacement, error: message };
+    }
+  }
+
+  private sendCompletionStatus(totalPages: number, totalNodes: number, report: Awaited<ReturnType<PluginController['createCanvasReport']>>) {
     sendToUI({
       type: 'generation-complete',
       stats: {
@@ -121,7 +162,8 @@ export class PluginController {
         totalNodes,
         processedNodes: this.processedNodes
       },
-      chunks: this.documentationChunks
+      chunks: this.documentationChunks,
+      report
     });
   }
 

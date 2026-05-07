@@ -64,7 +64,18 @@ export function normalizeActionFromFigma(type: string): string {
  */
 export function normalizeActionFromInternal(type: string): string {
   const map: Record<string, string> = {
-    'navigate': 'Navigate',
+    'none': 'None',
+    'navigate': 'Navigate to',
+    'change-to': 'Change to',
+    'back': 'Back',
+    'scroll-to': 'Scroll to',
+    'open-link': 'Open link',
+    'set-variable': 'Set variable',
+    'set-variable-mode': 'Set variable mode',
+    'conditional': 'Conditional',
+    'open-overlay': 'Open overlay',
+    'swap-overlay': 'Swap overlay',
+    'close-overlay': 'Close overlay',
     'overlay': 'Show overlay',
     'animation': 'Animate',
     'state-change': 'Change state',

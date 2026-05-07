@@ -8,6 +8,37 @@ import {
 import type { BaseNode, SceneNode } from '../../types/figma';
 
 export class InteractionParser {
+  extractTextContent(node: BaseNode): string | undefined {
+    const textValues: string[] = [];
+    this.collectTextContent(node, textValues);
+
+    const textContent = textValues
+      .map(value => value.trim())
+      .filter(Boolean)
+      .join(' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    return textContent ? this.truncateText(textContent, 60) : undefined;
+  }
+
+  private truncateText(value: string, maxLength: number): string {
+    return value.length > maxLength ? `${value.slice(0, maxLength)}…` : value;
+  }
+
+  private collectTextContent(node: BaseNode, textValues: string[]): void {
+    if ('type' in node && node.type === 'TEXT' && 'characters' in node) {
+      textValues.push(String(node.characters));
+      return;
+    }
+
+    if ('children' in node) {
+      for (const child of node.children as readonly BaseNode[]) {
+        this.collectTextContent(child, textValues);
+      }
+    }
+  }
+
   // Async migration: Await findParentFrame and getNodePath for Figma Community compatibility
   async getScreenContext(node: BaseNode): Promise<ScreenContext> {
     let parentFrame = null;
@@ -63,36 +94,55 @@ export class InteractionParser {
     return { type: triggerType, metadata };
   }
 
-  parseAction(reaction: any): { type: ActionType; metadata: ActionMetadata } {
-    if (!reaction?.action?.type) {
-      console.warn('[parseAction] Missing action type, skipping reaction');
-      return { type: 'navigate', metadata: {} };
+  parseActions(reaction: any): Array<{ type: ActionType; metadata: ActionMetadata }> {
+    const actions = Array.isArray(reaction?.actions)
+      ? reaction.actions
+      : reaction?.action
+        ? [reaction.action]
+        : [];
+
+    if (actions.length === 0) {
+      return [{ type: 'none', metadata: {} }];
     }
 
-    const actionType = this.normalizeActionType(reaction.action.type);
+    return actions.map((action: any) => this.parseAction(action));
+  }
+
+  parseAction(action: any): { type: ActionType; metadata: ActionMetadata } {
+    if (!action?.type) {
+      console.warn('[parseAction] Missing action type, marking as none');
+      return { type: 'none', metadata: {} };
+    }
+
+    const actionType = this.normalizeActionType(action);
     const metadata: ActionMetadata = {};
 
-    if (reaction.action.transition) {
+    if (action.transition) {
       metadata.animation = {
-        type: reaction.action.transition.type || 'INSTANT',
-        duration: reaction.action.transition.duration || 0,
-        easing: reaction.action.transition.easing?.type || 'EASE_OUT'
+        type: action.transition.type || 'INSTANT',
+        duration: action.transition.duration || 0,
+        easing: action.transition.easing?.type || 'EASE_OUT'
       };
     }
 
-    // Figma API uses destinationId (string), not destination (object)
-    if (reaction.action.destinationId) {
-      metadata.destinationId = reaction.action.destinationId;
+    if (action.destinationId) metadata.destinationId = action.destinationId;
+    if (action.navigation) metadata.navigation = action.navigation;
+    if (action.url) metadata.url = action.url;
+    if (typeof action.openInNewTab === 'boolean') metadata.openInNewTab = action.openInNewTab;
+    if ('variableId' in action) metadata.variableId = action.variableId;
+    if ('variableCollectionId' in action) metadata.variableCollectionId = action.variableCollectionId;
+    if ('variableModeId' in action) metadata.variableModeId = action.variableModeId;
+    if (Array.isArray(action.conditionalBlocks)) metadata.conditionalBlocks = action.conditionalBlocks.length;
+    if (action.mediaAction) metadata.mediaAction = action.mediaAction;
+
+    if ((actionType === 'open-overlay' || actionType === 'overlay') && action.overlaySettings) {
+      metadata.overlay = action.overlaySettings.name;
     }
 
-    if (actionType === 'overlay' && reaction.action.overlaySettings) {
-      metadata.overlay = reaction.action.overlaySettings.name;
-    }
-
-    if (actionType === 'state-change' && reaction.action.states) {
+    if ((actionType === 'state-change' || actionType === 'change-to') && action.states) {
       metadata.state = {
-        from: reaction.action.states.current,
-        to: reaction.action.states.target
+        from: action.states.current,
+        to: action.states.target
       };
     }
 
@@ -172,20 +222,42 @@ export class InteractionParser {
     return normalizedType;
   }
 
-  private normalizeActionType(type: string): ActionType {
+  private normalizeActionType(action: any): ActionType {
+    const rawType = String(action.type || '').toUpperCase();
+
+    if (rawType === 'NODE') {
+      const navigation = String(action.navigation || '').toUpperCase();
+      const navigationMap: Record<string, ActionType> = {
+        'NAVIGATE': 'navigate',
+        'CHANGE_TO': 'change-to',
+        'SCROLL_TO': 'scroll-to',
+        'OVERLAY': 'open-overlay',
+        'SWAP': 'swap-overlay'
+      };
+      return navigationMap[navigation] ?? 'navigate';
+    }
+
     const actionMap: Record<string, ActionType> = {
+      'NONE': 'none',
+      'BACK': 'back',
+      'CLOSE': 'close-overlay',
+      'URL': 'open-link',
+      'OPEN_URL': 'open-link',
+      'SET_VARIABLE': 'set-variable',
+      'SET_VARIABLE_MODE': 'set-variable-mode',
+      'CONDITIONAL': 'conditional',
+      'UPDATE_MEDIA_RUNTIME': 'animation',
       'NAVIGATE': 'navigate',
       'SMART_ANIMATE': 'smart-animate',
-      'OVERLAY': 'overlay',
-      'SWAP': 'component-swap',
-      'STATE_CHANGE': 'state-change',
-      'OPEN_URL': 'navigate'
+      'OVERLAY': 'open-overlay',
+      'SWAP': 'swap-overlay',
+      'STATE_CHANGE': 'change-to'
     };
 
-    const normalizedType = actionMap[type.toUpperCase()];
+    const normalizedType = actionMap[rawType];
     if (!normalizedType) {
-      console.warn(`Unknown action type: ${type}, defaulting to 'navigate'`);
-      return 'navigate';
+      console.warn(`Unknown action type: ${action.type}, defaulting to 'none'`);
+      return 'none';
     }
 
     return normalizedType;

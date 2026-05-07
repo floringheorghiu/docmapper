@@ -1,4 +1,4 @@
-import type { Scope, DocumentationChunk } from './documentation';
+import type { Scope, DocumentationChunk, ReportPlacement } from './documentation';
 
 export interface GenerationProgress {
   type: 'generation-progress';
@@ -22,12 +22,19 @@ export interface MemoryWarning {
 
 export type PluginToUIMessage =
   | GenerationProgress
-  | { type: 'generation-complete'; stats: GenerationStats; chunks: DocumentationChunk[] }
+  | { type: 'generation-complete'; stats: GenerationStats; chunks: DocumentationChunk[]; report?: ReportStatus }
   | { type: 'generation-error'; error: string; canResume: boolean; pageId?: string }
+  | { type: 'generation-warning'; message: string }
   | { type: 'chunk-loaded'; chunk: DocumentationChunk }
   | MemoryWarning;
 
+export interface ReportStatus {
+  created: boolean;
+  placement: ReportPlacement;
+  error?: string;
+}
+
 export type UIToPluginMessage =
-  | { type: 'generate-docs'; options: { scope: Scope } }
+  | { type: 'generate-docs'; options: { scope: Scope; reportPlacement?: ReportPlacement } }
   | { type: 'cancel-generation' }
   | { type: 'open-url'; url: string };

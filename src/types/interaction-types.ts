@@ -34,10 +34,12 @@ export interface InteractionData {
   nodeId?: string;
   nodeName: string;
   elementName: string;
+  textContent?: string;
   trigger: string;
   action: string;
   destination?: string;
   destinationId?: string;
+  url?: string;
   metadata?: {
     delay?: number;
     duration?: number;
